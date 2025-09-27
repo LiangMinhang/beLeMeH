@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>上传单词文件</h2>
+    <p>支持格式：.txt (制表符分隔), .xlsx, .xls</p>
+    
+    <form method="POST" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">选择文件</label>
+            <input type="file" id="file" name="file" accept=".txt,.xlsx,.xls" required>
+        </div>
+        
+        <button type="submit" class="btn">上传</button>
+    </form>
+</div>
+{% endblock %}

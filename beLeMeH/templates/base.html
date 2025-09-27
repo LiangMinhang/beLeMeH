@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>背了没beLeMeH</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>背了没beLeMeH</h1>
+        <nav>
+            {% if current_user.is_authenticated %}
+                <span>欢迎, {{ current_user.username }}</span>
+                <a href="{{ url_for('file_manager') }}">文件管理</a>
+                <a href="{{ url_for('upload') }}">上传文件</a>
+                <a href="{{ url_for('logout') }}">登出</a>
+            {% else %}
+                <a href="{{ url_for('login') }}">登录</a>
+                <a href="{{ url_for('register') }}">注册</a>
+            {% endif %}
+        </nav>
+    </header>
+    
+    <main>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for message in messages %}
+                        <div class="flash">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer>
+        <p>&copy; 2025 背了没beLeMeH</p>
+    </footer>
+    
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

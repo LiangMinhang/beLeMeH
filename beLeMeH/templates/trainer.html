@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container trainer-container">
+    <div class="current-file">
+        <h3>当前文件: {{ current_file.filename }}</h3>
+        <a href="{{ url_for('file_manager') }}" class="btn btn-sm btn-secondary">切换文件</a>
+    </div>
+    
+    <div class="params-section">
+        <div class="param-group">
+            <label for="a-param">L选项位置:</label>
+            <input type="number" id="a-param" min="1" max="100" value="{{ trainer.a }}">
+        </div>
+        
+        <div class="param-group">
+            <label for="b-param">M选项位置:</label>
+            <input type="number" id="b-param" min="1" max="100" value="{{ trainer.b }}">
+        </div>
+        
+        <div class="legend">
+            <span>L-陌生 | M-模糊 | H-熟悉</span>
+        </div>
+    </div>
+    
+    <div class="word-display">
+        <div class="word">{{ word.word }}</div>
+    </div>
+    
+    <div class="definition-display">
+        <div class="definition-content">
+            <!-- 释义将在这里显示 -->
+        </div>
+    </div>
+    
+    <div class="tag-display">
+        <span>标签: {{ word.tag }}</span>
+    </div>
+    
+    <div class="status-display">
+        <span>待学习: {{ trainer.to_learn|length }} | 已学习: {{ trainer.learned|length }} | L位置={{ trainer.a }}, M位置={{ trainer.b }}</span>
+    </div>
+    
+    <div class="choice-buttons">
+        <button class="choice-btn low" data-choice="L">陌生 (L)</button>
+        <button class="choice-btn medium" data-choice="M">模糊 (M)</button>
+        <button class="choice-btn high" data-choice="H">熟悉 (H)</button>
+        <button class="choice-btn master">已掌握 (✓)</button>
+    </div>
+    
+    <div class="action-buttons">
+        <button class="action-btn prev">上一个单词</button>
+        <button class="action-btn next">下一个单词</button>
+    </div>
+    
+    <div class="bottom-buttons">
+        <button class="bottom-btn edit">编辑单词</button>
+        <button class="bottom-btn add">添加单词</button>
+        <button class="bottom-btn reset">重置进度</button>
+    </div>
+</div>
+{% endblock %}

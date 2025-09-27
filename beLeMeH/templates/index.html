@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>欢迎使用单词学习系统</h2>
+    <p>这是一个帮助您高效记忆单词的在线工具</p>
+    
+    {% if not current_user.is_authenticated %}
+        <div class="auth-links">
+            <a href="{{ url_for('login') }}" class="btn">登录</a>
+            <a href="{{ url_for('register') }}" class="btn">注册</a>
+        </div>
+    {% else %}
+        <div class="action-links">
+            <a href="{{ url_for('upload') }}" class="btn">上传单词文件</a>
+            <a href="{{ url_for('trainer') }}" class="btn">开始学习</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
