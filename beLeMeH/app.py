@@ -325,6 +325,10 @@ class VocabularyTrainer:
         
         return self.current_word, f"已返回到单词 '{self.current_word.word}'，标签已清除最后一次选择"
     
+    def can_undo_last_choice(self):
+        """检查是否可以撤销上一次选择"""
+        return self.previous_word is not None
+    
     def add_word(self, word, definition):
         """添加新单词到待学习队列并更新原始文件"""
         # 创建新单词对象
@@ -622,7 +626,8 @@ def process_choice():
             'definition': word.definition,
             'tag': word.tag
         },
-        'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}"
+        'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}",
+        'can_undo': trainer.can_undo_last_choice()
     })
 
 # 路由：获取下一个单词（修改为使用全局训练器状态）
@@ -665,7 +670,8 @@ def next_word():
             'definition': word.definition,
             'tag': word.tag
         },
-        'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}"
+        'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}",
+        'can_undo': trainer.can_undo_last_choice()
     })
 
 # 路由：获取上一个单词（修改为使用全局训练器状态）
@@ -699,7 +705,8 @@ def prev_word():
             'tag': word.tag
         },
         'message': message,
-        'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}"
+        'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}",
+        'can_undo': trainer.can_undo_last_choice()
     })
 
 # 路由：标记为已掌握（修改为使用全局训练器状态）
@@ -736,15 +743,26 @@ def mark_learned():
             'definition': word.definition,
             'tag': word.tag
         },
-        'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}"
+        'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}",
+        'can_undo': trainer.can_undo_last_choice()
     })
 
 # 路由：更新参数（修改为使用全局训练器状态）
 @app.route('/update_params', methods=['POST'])
 @login_required
 def update_params():
-    a = request.json.get('a')
-    b = request.json.get('b')
+    data = request.json
+    a = data.get('a')
+    b = data.get('b')
+    
+    # 验证参数
+    try:
+        a = int(a)
+        b = int(b)
+        if a < 1 or b < 1 or a > 100 or b > 100:
+            return jsonify({'success': False, 'message': '参数值无效'})
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': '参数值无效'})
     
     # 从全局字典获取训练器状态
     user_trainer = user_trainers.get(current_user.id)
@@ -755,8 +773,8 @@ def update_params():
     file_id = user_trainer['file_id']
     
     # 更新参数
-    trainer.a = int(a)
-    trainer.b = int(b)
+    trainer.a = a
+    trainer.b = b
     
     # 保存训练器状态
     user_trainers[current_user.id] = user_trainer
@@ -766,7 +784,6 @@ def update_params():
     
     return jsonify({
         'success': True,
-        'message': f"参数已更新: L位置={a}, M位置={b}",
         'status': f"待学习: {len(trainer.to_learn)} | 已学习: {len(trainer.learned)} | L位置={trainer.a}, M位置={trainer.b}"
     })
 
