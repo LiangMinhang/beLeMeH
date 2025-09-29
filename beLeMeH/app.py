@@ -7,12 +7,35 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-import pandas as pd
+from openpyxl import load_workbook
 import json
 import hashlib
 from collections import deque
 import uuid
 from flask import jsonify
+# 兼容校验：支持 pbkdf2:sha256（推荐）与可能的旧 sha256 格式
+def verify_password_hash(stored_hash, plain_password):
+    try:
+        return check_password_hash(stored_hash, plain_password)
+    except Exception as e:
+        try:
+            # 兼容旧格式：sha256$hash 或 sha256$salt$hash
+            if stored_hash.startswith('sha256$'):
+                parts = stored_hash.split('$')
+                if len(parts) == 2:
+                    # sha256$hash（无盐）
+                    algo, hex_hash = parts
+                    import hashlib
+                    return hashlib.sha256(plain_password.encode('utf-8')).hexdigest() == hex_hash
+                elif len(parts) == 3:
+                    # sha256$salt$hash（有盐）
+                    _, salt, hex_hash = parts
+                    import hashlib
+                    return hashlib.sha256((plain_password + salt).encode('utf-8')).hexdigest() == hex_hash
+        except Exception:
+            pass
+        return False
+
 
 # 初始化Flask应用
 app = Flask(__name__)
@@ -184,12 +207,16 @@ class VocabularyTrainer:
         try:
             # 检查文件扩展名
             if filename.endswith('.xlsx') or filename.endswith('.xls'):
-                # 读取Excel文件
-                df = pd.read_excel(filename)
-                # 假设第一列是单词，第二列是释义
-                for _, row in df.iterrows():
-                    word = str(row[0])
-                    definition = str(row[1]) if len(row) > 1 else ""
+                # 使用 openpyxl 读取 Excel 文件（首个工作表）
+                wb = load_workbook(filename=filename, read_only=True, data_only=True)
+                ws = wb.worksheets[0]
+                for row in ws.iter_rows(min_row=1, values_only=True):
+                    if not row:
+                        continue
+                    word = str(row[0]) if row[0] is not None else ""
+                    if word == "":
+                        continue
+                    definition = str(row[1]) if len(row) > 1 and row[1] is not None else ""
                     self.to_learn.append(Vocabulary(word, definition, tag=""))
             else:
                 # 文本文件格式
@@ -390,7 +417,7 @@ def login():
         
         user = User.query.filter_by(username=username).first()
         
-        if user and check_password_hash(user.password, password):
+        if user and verify_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for('trainer'))
         else:
@@ -1000,12 +1027,29 @@ def edit_word():
     })
 
 # 初始化数据库
-@app.before_first_request
-def create_tables():
-    # 仅在不存在时创建表；生产环境不要删除表
-    db.create_all()
+def ensure_schema():
+    # 创建表并确保缺失字段补齐（如 is_public）
+    from sqlalchemy import text
+    with app.app_context():
+        db.create_all()
+        try:
+            result = db.session.execute(text("PRAGMA table_info(vocab_file)"))
+            has_is_public = False
+            for row in result:
+                # row columns: cid, name, type, notnull, dflt_value, pk
+                if len(row) > 1 and row[1] == 'is_public':
+                    has_is_public = True
+                    break
+            if not has_is_public:
+                db.session.execute(text("ALTER TABLE vocab_file ADD COLUMN is_public BOOLEAN DEFAULT 0"))
+                db.session.commit()
+        except Exception as e:
+            # 安静失败，避免阻断启动；建议在日志中查看
+            pass
 
 # 启动应用
+ensure_schema()
+
 if __name__ == '__main__':
     debug_flag = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
     port = int(os.environ.get('PORT', '5000'))
