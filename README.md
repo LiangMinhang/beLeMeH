@@ -21,6 +21,8 @@
 
 beLeMeH文件夹是web应用，beLeMeH.py是本地应用
 
+**不只背单词，万物皆可背**
+
 ## Situation
 利用艾宾浩斯曲线的背单词软件都要钱，但没钱
 ## Task
