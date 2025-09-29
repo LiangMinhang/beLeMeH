@@ -16,7 +16,8 @@ from flask import jsonify
 
 # 初始化Flask应用
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'  # 替换为随机字符串
+# 使用环境变量配置 SECRET_KEY，未提供时使用一次性随机值（建议生产环境务必设置）
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or os.urandom(24)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'data/uploads'
@@ -44,6 +45,7 @@ class VocabFile(db.Model):
     filepath = db.Column(db.String(300))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     progress_data = db.Column(db.Text)  # 存储JSON格式的进度数据
+    is_public = db.Column(db.Boolean, default=False)  # 是否公开共享
 
 # 用户加载器
 @login_manager.user_loader
@@ -480,6 +482,48 @@ def file_manager():
     
     return render_template('file_manager.html', files=files)
 
+# 路由：公开库列表
+@app.route('/public_library')
+@login_required
+def public_library():
+    public_files = VocabFile.query.filter_by(is_public=True).all()
+    return render_template('public_library.html', files=public_files)
+
+# 路由：切换公开状态（仅限文件所有者）
+@app.route('/toggle_public/<int:file_id>', methods=['POST'])
+@login_required
+def toggle_public(file_id):
+    file = VocabFile.query.get(file_id)
+    if not file or file.user_id != current_user.id:
+        return jsonify({'success': False, 'message': '文件不存在或无权操作'})
+    try:
+        file.is_public = not bool(file.is_public)
+        db.session.commit()
+        state = '已公开' if file.is_public else '已设为私有'
+        return jsonify({'success': True, 'message': state, 'is_public': file.is_public})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'更新失败: {str(e)}'})
+
+# 路由：从公开库使用文件（为当前用户创建一条记录）
+@app.route('/use_public/<int:file_id>', methods=['POST'])
+@login_required
+def use_public(file_id):
+    src = VocabFile.query.get(file_id)
+    if not src or not src.is_public:
+        return jsonify({'success': False, 'message': '公开文件不存在'}), 404
+    # 引用同一物理文件，保持关联
+    copy = VocabFile(
+        filename=src.filename,
+        filepath=src.filepath,
+        user_id=current_user.id,
+        progress_data=None,
+        is_public=False
+    )
+    db.session.add(copy)
+    db.session.commit()
+    return jsonify({'success': True, 'message': '已添加到我的文件', 'file_id': copy.id, 'redirect': url_for('select_file', file_id=copy.id)})
+
 # 路由：选择文件
 @app.route('/select_file/<int:file_id>')
 @login_required
@@ -546,10 +590,11 @@ def delete_file(file_id):
         return jsonify({'success': False, 'message': '文件不存在或无权访问'})
     
     try:
-        # 删除物理文件
-        if os.path.exists(file.filepath):
+        # 删除物理文件（仅当没有其他引用时）
+        same_refs = VocabFile.query.filter(VocabFile.filepath == file.filepath, VocabFile.id != file.id).count()
+        if same_refs == 0 and os.path.exists(file.filepath):
             os.remove(file.filepath)
-        
+
         # 删除数据库记录
         db.session.delete(file)
         db.session.commit()
@@ -561,6 +606,45 @@ def delete_file(file_id):
         return jsonify({'success': True, 'message': '文件已删除'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'删除文件失败: {str(e)}'})
+
+# 路由：在公共库删除（仅拥有者，安全删除）
+@app.route('/delete_public/<int:file_id>', methods=['POST'])
+@login_required
+def delete_public(file_id):
+    file = VocabFile.query.get(file_id)
+    if not file or not file.is_public or file.user_id != current_user.id:
+        return jsonify({'success': False, 'message': '文件不存在或无权访问'})
+    try:
+        # 删除物理文件（仅当没有其他引用时）
+        same_refs = VocabFile.query.filter(VocabFile.filepath == file.filepath, VocabFile.id != file.id).count()
+        if same_refs == 0 and os.path.exists(file.filepath):
+            os.remove(file.filepath)
+
+        db.session.delete(file)
+        db.session.commit()
+        return jsonify({'success': True, 'message': '公开文件已删除'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'删除失败: {str(e)}'})
+
+# 路由：重命名文件（仅拥有者）
+@app.route('/rename_file/<int:file_id>', methods=['POST'])
+@login_required
+def rename_file(file_id):
+    file = VocabFile.query.get(file_id)
+    if not file or file.user_id != current_user.id:
+        return jsonify({'success': False, 'message': '文件不存在或无权访问'})
+    data = request.get_json(silent=True) or {}
+    new_name = data.get('filename') or request.form.get('filename')
+    if not new_name:
+        return jsonify({'success': False, 'message': '新文件名不能为空'})
+    file.filename = new_name
+    try:
+        db.session.commit()
+        return jsonify({'success': True, 'message': '文件名已更新', 'filename': file.filename})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'更新失败: {str(e)}'})
 
 # 路由：学习界面（修改为使用全局训练器状态）
 @app.route('/trainer')
@@ -918,9 +1002,11 @@ def edit_word():
 # 初始化数据库
 @app.before_first_request
 def create_tables():
-    db.drop_all()  # 删除旧表（仅在开发环境中使用）
-    db.create_all()  # 创建新表
+    # 仅在不存在时创建表；生产环境不要删除表
+    db.create_all()
 
 # 启动应用
 if __name__ == '__main__':
-    app.run(debug=True)
+    debug_flag = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    port = int(os.environ.get('PORT', '5000'))
+    app.run(host='0.0.0.0', port=port, debug=debug_flag)
