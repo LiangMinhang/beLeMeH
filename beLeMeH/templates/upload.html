@@ -13,5 +13,33 @@
         
         <button type="submit" class="btn">上传</button>
     </form>
+
+    <div class="help">
+        <h3>文件内容说明</h3>
+        <ul>
+            <li>Excel（.xlsx/.xls）：无需表头，每行第一列为单词，第二列为释义。</li>
+            <li>TXT（.txt）：无需表头，每行用制表符（TAB）分隔，格式为 <code>单词[TAB]释义</code>。</li>
+        </ul>
+        <div class="examples">
+            <h4>Excel 示例（前几行展示）</h4>
+            <table class="table" style="max-width:520px">
+                
+                <tbody>
+                    <tr>
+                        <td>apple</td>
+                        <td>苹果</td>
+                    </tr>
+                    <tr>
+                        <td>banana</td>
+                        <td>香蕉</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>TXT 示例（用 TAB 分隔）</h4>
+            <pre style="white-space:pre; max-width:520px; overflow:auto">apple	苹果
+banana	香蕉</pre>
+        </div>
+    </div>
 </div>
 {% endblock %}
