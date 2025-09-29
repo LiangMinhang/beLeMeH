@@ -20,6 +20,7 @@
                 <tr>
                     <th>文件名</th>
                     <th>上传时间</th>
+                    <th>公开</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -29,13 +30,20 @@
                     <td>{{ file.filename }}</td>
                     <td>已上传</td>
                     <td>
+                        <label>
+                            <input type="checkbox" class="toggle-public" data-file-id="{{ file.id }}" {% if file.is_public %}checked{% endif %}>
+                            <span>公开</span>
+                        </label>
+                    </td>
+                    <td>
                         <a href="{{ url_for('select_file', file_id=file.id) }}" class="btn btn-primary">选择</a>
-                        <button class="btn btn-danger delete-file" data-file-id="{{ file.id }}">删除</button>
+                        <button class="btn btn-secondary rename-file" data-file-id="{{ file.id }}">重命名</button>
+                        <button class="btn btn-danger delete-file" data-file-id="{{ file.id }}" data-is-public="{{ '1' if file.is_public else '0' }}">删除</button>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="3">您还没有上传任何文件</td>
+                    <td colspan="4">您还没有上传任何文件</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -44,33 +52,55 @@
     
     <div class="upload-button">
         <a href="{{ url_for('upload') }}" class="btn btn-success">上传新文件</a>
+        <a href="{{ url_for('public_library') }}" class="btn">公共文档库</a>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 删除文件按钮
-    document.querySelectorAll('.delete-file').forEach(button => {
-        button.addEventListener('click', function() {
+    // 切换公开状态
+    document.querySelectorAll('.toggle-public').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
             const fileId = this.dataset.fileId;
-            
-            if (confirm('确定要删除这个文件吗？这将永久删除文件及其所有学习进度。')) {
-                fetch('/delete_file/' + fileId, {
-                    method: 'POST'
-                })
-                .then(response => response.json())
+            fetch('/toggle_public/' + fileId, { method: 'POST' })
+                .then(r => r.json())
                 .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        // 刷新页面
-                        location.reload();
+                    if (!data.success) {
+                        alert(data.message || '更新失败');
+                        this.checked = !this.checked;
                     } else {
-                        alert(data.message);
+                        // 同步更新本行删除按钮的 data-is-public 属性，确保确认文案正确
+                        const row = this.closest('tr');
+                        const delBtn = row ? row.querySelector('.delete-file') : null;
+                        if (delBtn) {
+                            delBtn.setAttribute('data-is-public', this.checked ? '1' : '0');
+                        }
+                        // 文本固定为“公开”，无需更新
                     }
                 });
-            }
         });
     });
+
+    // 重命名
+    document.querySelectorAll('.rename-file').forEach(button => {
+        button.addEventListener('click', function() {
+            const fileId = this.dataset.fileId;
+            const newName = prompt('输入新的文件名：');
+            if (!newName) return;
+            fetch('/rename_file/' + fileId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: newName })
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || '重命名失败');
+                }
+            });
+        });
+    });
+    // 删除仍由全局 script.js 的统一处理器接管，避免重复绑定
 });
 </script>
 {% endblock %}
