@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>公共文档库</h2>
+    <div class="file-list">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>文件名</th>
+                    <th>来源用户</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for file in files %}
+                <tr>
+                    <td>{{ file.filename }}</td>
+                    <td>{{ file.user.username if file.user else '未知' }}</td>
+                    <td>
+                        <button class="btn btn-primary use-public" data-file-id="{{ file.id }}">加入到我的文件</button>
+                        {% if file.user_id == current_user.id %}
+                        <button class="btn btn-secondary rename-file" data-file-id="{{ file.id }}">重命名</button>
+                        <button class="btn btn-danger delete-public" data-file-id="{{ file.id }}">删除</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3">暂无公开文件</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.use-public').forEach(button => {
+        button.addEventListener('click', function() {
+            const fileId = this.dataset.fileId;
+            fetch('/use_public/' + fileId, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            alert('已加入到我的文件');
+                        }
+                    } else {
+                        alert(data.message || '操作失败');
+                    }
+                });
+        });
+    });
+
+    // 拥有者操作：重命名
+    document.querySelectorAll('.rename-file').forEach(button => {
+        button.addEventListener('click', function() {
+            const fileId = this.dataset.fileId;
+            const newName = prompt('输入新的文件名：');
+            if (!newName) return;
+            fetch('/rename_file/' + fileId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: newName })
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || '重命名失败');
+                }
+            });
+        });
+    });
+
+    // 拥有者操作：删除公开文件（同时会影响所有引用同一物理文件的个人记录）
+    document.querySelectorAll('.delete-public').forEach(button => {
+        button.addEventListener('click', function() {
+            const fileId = this.dataset.fileId;
+            if (!confirm('该文件在公共文档库中，删除会同时移除个人库中的相同文件引用。确定删除吗？')) return;
+            fetch('/delete_public/' + fileId, { method: 'POST' })
+              .then(r => r.json()).then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || '删除失败');
+                }
+              });
+        });
+    });
+});
+</script>
+{% endblock %}
+
