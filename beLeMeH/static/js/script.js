@@ -18,8 +18,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.delete-file').forEach(button => {
         button.addEventListener('click', function() {
             const fileId = this.dataset.fileId;
-            
-            if (confirm('确定要删除这个文件吗？这将永久删除文件及其所有学习进度。')) {
+            const isPublic = this.dataset.isPublic === '1';
+            const msg = isPublic
+                ? '该文件为公开文件，同时会从公共文档库移除。确定删除吗？'
+                : '确定要删除这个文件吗？这将永久删除文件及其所有学习进度。';
+
+            if (confirm(msg)) {
                 fetch('/delete_file/' + fileId, {
                     method: 'POST'
                 })
